@@ -1,38 +1,55 @@
+from bs4 import BeautifulSoup
 import requests
-
-#from bs4 import BeautifulSoup
-
-respons = requests.get ("https://www.ceneo.pl/71299209#tab=reviews")
-
-print(respons.text)
+import json
+#from soupsieve import select_one
 
 
-page_dom = BeautifulSoup(respons.text, 'html.parser')
-# print(page_dom.prettify())
+def extract_element(dom_tree, selector, attribute=None):
+    try:
+        if isinstance(attribute, str):
+            return dom_tree.select_one(selector)[attribute].strip()
+        if isinstance(attribute, list):
+            return [e.text.strip() for e in dom_tree.select(selector)]
+        return dom_tree.select_one(selector).text.strip()
+    except (AttributeError, TypeError):
+        return None
 
-reviews = page_dom.select("div.js_product-review")
-print(type(reviews))
-review = reviews.pop(0)
-print(type(review))
-review = page_dom.select_one("div.js_product-review")
-print(type(review))
+all_reviews = []
+service_url = "https://www.ceneo.pl"
+next_page = "/39562616#tab=reviews"
+# next_page = "/71299209#tab=reviews"
+while next_page:
+    respons = requests.get(service_url + next_page)
+    page_dom = BeautifulSoup(respons.text, 'html.parser')
+    # print(page_dom.prettify())
 
-review_id = review["data-entry-id"]
-author = review.select_one("span.user-post__author-name").text.strip()
-recommendation = review.select_one(
-    "span.user-post__author-recomendation").text.strip()
-stars = review.select_one("span.user-post__score-count").text.strip()
-content = review.select_one("div.user-post__text").text.strip()
-pros = review.select(
-    "div.review-feature__title--positives ~ div.review-feature__item")
-cons = review.select(
-    "div.review-feature__title--negatives ~ div.review-feature__item")
-useful = review.select_one("button.vote-yes").text.strip()
-useless = review.select_one("button.vote-no").text.strip()
-purchased = review.select_one("div.review-pz").text.strip()
-review_date = review.select_one(
-    "span.user-post__published > time:nth-child(1)")["datetime"].strip()
-purchase_date = review.select_one(
-    "span.user-post__published > time:nth-child(1)")["datetime"].strip()
+    reviews = page_dom.select("div.js_product-review")
+    #print(type(reviews))
+#review = reviews.pop(0)
+#print(type(review))
+#review = page_dom.select_one("div.js_product-review")
+#print(type(review))
+    for review in reviews:
+        single_review = {
+            "review_id": review["data-entry-id"],
+            "author": extract_element(review, "span.user-post__author-name"),
+            "recommendation": extract_element(review, "span.user-post__author-recomendation"),
+            "stars": extract_element(review, "span.user-post__score-count"),
+            "content": extract_element(review, "div.user-post__text"),
+            "pros": extract_element(review,"div.review-feature__title--positives ~ div.review-feature__item", []),
+            "cons": extract_element(review, "div.review-feature__title--negatives ~ div.review-feature__item", []),
+            "useful": extract_element(review, "button.vote-yes"),
+            "useless": extract_element(review, "button.vote-no"),
+            "purchased": extract_element(review, "div.review-pz"),
+            "review_date": extract_element(review, "span.user-post__published > time:nth-child(1)", "datetime"),
+            "purchase_date": extract_element(review, "span.user-post__published > time:nth-child(2)", "datetime")
+        }
+        all_reviews.append(single_review)
+    next_page = extract_element(page_dom,"a.pagination__next", "href")
 
-print(review_id, author, recommendation, stars, content, pros, cons, useful, useless, purchased, review_date, purchase_date)
+with open("opinions/39562616.json", "w", encoding="UTF-8") as jf:
+    json.dump(all_reviews, jf, ensure_ascii=False, indent=4)
+
+# print(json.dumps(all_reviews, ensure_ascii=False, indent=4))
+#print(json.dumps(all_reviews, ensure_ascii=False, indent=4)) #1)musi byc czescia petli for 
+# 2) importowana biblioteka jsona 3) ensuree ascii false, zeby bul unicode 4) indent =4 kazdy element osobno z cieciem na 4
